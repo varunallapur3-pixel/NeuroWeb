@@ -13,8 +13,12 @@ export default function App() {
   const [activeMode, setActiveMode] = useState('chat'); // 'chat' | 'graph' | 'step'
   
   const [chats, setChats] = useState(() => {
-    const saved = localStorage.getItem('neuroweb_chats');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('neuroweb_chats');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
   const [currentChatId, setCurrentChatId] = useState(null);
   
@@ -37,7 +41,9 @@ export default function App() {
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('neuroweb_chats', JSON.stringify(chats));
+    try {
+      localStorage.setItem('neuroweb_chats', JSON.stringify(chats));
+    } catch (e) {}
   }, [chats]);
 
   useEffect(() => {
