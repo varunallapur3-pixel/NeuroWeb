@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import NeuralCanvas from './components/NeuralCanvas';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
-import ConceptGraph from './components/ConceptGraph';
+import NeuroWebApp from './neuroweb.jsx';
 import StepByStepViewer from './components/StepByStepViewer';
 import ModelSelectorModal from './components/ModelSelectorModal';
 import { generateFallbackGraph, generateFallbackStepGuide } from './utils/fallbackGenerator';
@@ -404,59 +404,8 @@ export default function App() {
         )}
 
         {activeMode === 'graph' && (
-          <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto' }}>
-            <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Topic Input Bar for Concept Graph */}
-              <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '20px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <Network size={24} color="var(--accent-cyan)" />
-                <input
-                  type="text"
-                  className="custom-input"
-                  placeholder="Enter any topic to build an interactive concept graph... (e.g. Quantum Computing, Neural Networks, Macroeconomics)"
-                  value={studioTopicInput}
-                  onChange={(e) => setStudioTopicInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleGenerateGraph()}
-                  style={{ flex: 1, fontSize: '1rem' }}
-                />
-                <button
-                  onClick={() => handleGenerateGraph()}
-                  disabled={!studioTopicInput.trim() || isGraphLoading}
-                  style={{
-                    padding: '0.75rem 1.25rem',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #00f2fe, #7928ca)',
-                    border: 'none',
-                    color: '#fff',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 0 15px rgba(0, 242, 254, 0.4)'
-                  }}
-                >
-                  {isGraphLoading ? <Loader2 size={18} className="spin" style={{ animation: 'spinSlow 1s linear infinite' }} /> : <Sparkles size={18} />}
-                  Build Concept Graph
-                </button>
-              </div>
-
-              {/* Render Graph Visualizer */}
-              {graphData ? (
-                <ConceptGraph
-                  topic={activeTopic || studioTopicInput}
-                  initialGraphData={graphData}
-                  onClose={() => setGraphData(null)}
-                />
-              ) : (
-                <div className="welcome-hero">
-                  <Network size={48} color="var(--accent-cyan)" />
-                  <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>Concept Knowledge Graph Studio</h2>
-                  <p className="hero-subtitle">
-                    Type any subject above to generate an interactive visual map with expandable sub-concept nodes.
-                  </p>
-                </div>
-              )}
-            </div>
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
+            <NeuroWebApp initialTopic={activeTopic || studioTopicInput} />
           </div>
         )}
 
