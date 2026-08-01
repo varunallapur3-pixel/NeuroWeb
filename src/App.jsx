@@ -5,6 +5,7 @@ import ChatWindow from './components/ChatWindow';
 import ConceptGraph from './components/ConceptGraph';
 import StepByStepViewer from './components/StepByStepViewer';
 import ModelSelectorModal from './components/ModelSelectorModal';
+import { generateFallbackGraph, generateFallbackStepGuide } from './utils/fallbackGenerator';
 import { Menu, Cpu, Globe, MessageSquare, Network, GraduationCap, Search, Sparkles, Send, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -207,11 +208,15 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic })
       });
-      if (!res.ok) throw new Error('Failed to generate graph');
-      const data = await res.json();
-      setGraphData(data.graph);
+      if (res.ok) {
+        const data = await res.json();
+        setGraphData(data.graph);
+      } else {
+        throw new Error('API server unavailable');
+      }
     } catch (err) {
-      console.error('Graph Generation Error:', err);
+      console.warn('Using client-side fallback graph generator:', err);
+      setGraphData(generateFallbackGraph(topic));
     } finally {
       setIsGraphLoading(false);
     }
@@ -231,11 +236,15 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic })
       });
-      if (!res.ok) throw new Error('Failed to generate step guide');
-      const data = await res.json();
-      setStepGuideData(data.guide);
+      if (res.ok) {
+        const data = await res.json();
+        setStepGuideData(data.guide);
+      } else {
+        throw new Error('API server unavailable');
+      }
     } catch (err) {
-      console.error('Step Guide Generation Error:', err);
+      console.warn('Using client-side fallback step guide generator:', err);
+      setStepGuideData(generateFallbackStepGuide(topic));
     } finally {
       setIsStepLoading(false);
     }

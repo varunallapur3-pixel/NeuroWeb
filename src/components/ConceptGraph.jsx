@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Network, Plus, Loader2, Sparkles, X, RefreshCw, Layers, ZoomIn, ZoomOut, Maximize2, Search, Info } from 'lucide-react';
+import { generateFallbackNodeExpansion } from '../utils/fallbackGenerator';
 
 export default function ConceptGraph({ topic, initialGraphData, onClose }) {
   const svgRef = useRef(null);
@@ -55,6 +56,9 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
 
     setExpandingNodeId(node.id);
 
+    let newNodes = [];
+    let newLinks = [];
+
     try {
       const response = await fetch('/api/expand-node', {
         method: 'POST',
@@ -67,41 +71,43 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to expand node: ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        newNodes = data.newNodes || [];
+        newLinks = data.newLinks || [];
+      } else {
+        throw new Error('API unavailable');
       }
-
-      const data = await response.json();
-      const newNodes = data.newNodes || [];
-      const newLinks = data.newLinks || [];
-
-      // Position new child nodes radially around the expanded parent node
-      const parentX = node.x;
-      const parentY = node.y;
-      const radius = 130;
-
-      const formattedNewNodes = newNodes.map((nn, idx) => {
-        const angle = (idx / newNodes.length) * 2 * Math.PI;
-        return {
-          ...nn,
-          x: parentX + Math.cos(angle) * radius,
-          y: parentY + Math.sin(angle) * radius,
-          parentId: node.id
-        };
-      });
-
-      setNodes((prev) => [...prev, ...formattedNewNodes]);
-      setLinks((prev) => [...prev, ...newLinks]);
-      
-      // Update expanded state on parent node
-      setNodes((prev) =>
-        prev.map((n) => (n.id === node.id ? { ...n, expanded: true } : n))
-      );
-    } catch (err) {
-      console.error('Error expanding concept node:', err);
-    } finally {
-      setExpandingNodeId(null);
+    } catch (apiErr) {
+      // Fallback for static hosting on GitHub Pages
+      const fallback = generateFallbackNodeExpansion(node.id, node.label, topic);
+      newNodes = fallback.newNodes;
+      newLinks = fallback.newLinks;
     }
+
+    // Position new child nodes radially around the expanded parent node
+    const parentX = node.x;
+    const parentY = node.y;
+    const radius = 130;
+
+    const formattedNewNodes = newNodes.map((nn, idx) => {
+      const angle = (idx / newNodes.length) * 2 * Math.PI;
+      return {
+        ...nn,
+        x: parentX + Math.cos(angle) * radius,
+        y: parentY + Math.sin(angle) * radius,
+        parentId: node.id
+      };
+    });
+
+    setNodes((prev) => [...prev, ...formattedNewNodes]);
+    setLinks((prev) => [...prev, ...newLinks]);
+    
+    // Update expanded state on parent node
+    setNodes((prev) =>
+      prev.map((n) => (n.id === node.id ? { ...n, expanded: true } : n))
+    );
+    setExpandingNodeId(null);
   };
 
   // Node Mouse Drag Handlers
