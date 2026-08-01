@@ -9,7 +9,7 @@ import { generateFallbackGraph, generateFallbackStepGuide } from './utils/fallba
 import { Menu, Cpu, Globe, MessageSquare, Network, GraduationCap, Search, Sparkles, Send, Loader2 } from 'lucide-react';
 
 export default function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth > 768);
   const [activeMode, setActiveMode] = useState('chat'); // 'chat' | 'graph' | 'step'
   
   const [chats, setChats] = useState(() => {
@@ -69,11 +69,13 @@ export default function App() {
     };
     setChats((prev) => [newChat, ...prev]);
     setCurrentChatId(newChat.id);
+    if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
   const handleSelectChat = (id) => {
     setCurrentChatId(id);
     setActiveMode('chat');
+    if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
   const handleDeleteChat = (id) => {
@@ -262,6 +264,10 @@ export default function App() {
     <div className="app-container">
       <NeuralCanvas />
 
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
+
       <Sidebar
         isOpen={sidebarOpen}
         chats={chats}
@@ -291,7 +297,7 @@ export default function App() {
               <button
                 onClick={() => setActiveMode('chat')}
                 style={{
-                  padding: '0.45rem 0.95rem',
+                  padding: '0.45rem 0.85rem',
                   borderRadius: '20px',
                   background: activeMode === 'chat' ? 'linear-gradient(135deg, #00f2fe, #4f46e5)' : 'transparent',
                   border: 'none',
@@ -306,13 +312,14 @@ export default function App() {
                 }}
               >
                 <MessageSquare size={15} />
-                <span>AI Chatbot</span>
+                <span className="nav-tab-label-full">AI Chatbot</span>
+                <span className="nav-tab-label-short">Chat</span>
               </button>
 
               <button
                 onClick={() => setActiveMode('graph')}
                 style={{
-                  padding: '0.45rem 0.95rem',
+                  padding: '0.45rem 0.85rem',
                   borderRadius: '20px',
                   background: activeMode === 'graph' ? 'linear-gradient(135deg, #00f2fe, #7928ca)' : 'transparent',
                   border: 'none',
@@ -327,13 +334,14 @@ export default function App() {
                 }}
               >
                 <Network size={15} />
-                <span>Concept Graph Studio</span>
+                <span className="nav-tab-label-full">Concept Graph Studio</span>
+                <span className="nav-tab-label-short">Graph</span>
               </button>
 
               <button
                 onClick={() => setActiveMode('step')}
                 style={{
-                  padding: '0.45rem 0.95rem',
+                  padding: '0.45rem 0.85rem',
                   borderRadius: '20px',
                   background: activeMode === 'step' ? 'linear-gradient(135deg, #7928ca, #ff007f)' : 'transparent',
                   border: 'none',
@@ -348,7 +356,8 @@ export default function App() {
                 }}
               >
                 <GraduationCap size={15} />
-                <span>Step-by-Step Academy</span>
+                <span className="nav-tab-label-full">Step-by-Step Academy</span>
+                <span className="nav-tab-label-short">Academy</span>
               </button>
             </div>
           </div>

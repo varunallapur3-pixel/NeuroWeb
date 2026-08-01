@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Network, Plus, Loader2, Sparkles, X, RefreshCw, Layers, ZoomIn, ZoomOut, Maximize2, Search, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Network, Plus, Loader2, Sparkles, X, ZoomIn, ZoomOut, Maximize2, Search, Layers } from 'lucide-react';
 import { generateFallbackNodeExpansion } from '../utils/fallbackGenerator';
 
 export default function ConceptGraph({ topic, initialGraphData, onClose }) {
   const svgRef = useRef(null);
+  const animRef = useRef(null);
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -19,26 +20,37 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
   // Node Dragging state
   const [draggedNodeId, setDraggedNodeId] = useState(null);
 
+  // Responsive state
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Initialize node layout from data
   useEffect(() => {
     if (!initialGraphData?.nodes) return;
 
     const width = 900;
-    const height = 600;
+    const height = 560;
     const centerX = width / 2;
     const centerY = height / 2;
     const rawNodes = initialGraphData.nodes;
 
     const formattedNodes = rawNodes.map((node, i) => {
       if (i === 0 || node.category === 'core') {
-        return { ...node, x: centerX, y: centerY, isRoot: true };
+        return { ...node, x: centerX, y: centerY, vx: 0, vy: 0, isRoot: true };
       }
       const angle = ((i - 1) / (rawNodes.length - 1)) * 2 * Math.PI;
-      const radius = 190;
+      const radius = isMobile ? 130 : 190;
       return {
         ...node,
         x: centerX + Math.cos(angle) * radius,
-        y: centerY + Math.sin(angle) * radius
+        y: centerY + Math.sin(angle) * radius,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2
       };
     });
 
@@ -47,9 +59,110 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
     if (formattedNodes.length > 0) {
       setSelectedNode(formattedNodes[0]);
     }
-  }, [initialGraphData]);
+  }, [initialGraphData, isMobile]);
 
-  // Expand a specific node by fetching child concepts from API
+  // Organic Physics Force Simulation for Smooth Layout & Elastic Movement
+  useEffect(() => {
+    if (nodes.length === 0) return;
+
+    let running = true;
+    const simulate = () => {
+      if (!running) return;
+
+      setNodes((prevNodes) => {
+        if (prevNodes.length === 0) return prevNodes;
+
+        const updated = prevNodes.map((n) => ({ ...n }));
+        const kRepel = 24000;
+        const kLink = 0.04;
+        const targetLinkDist = isMobile ? 110 : 160;
+        const damping = 0.82;
+
+        // 1. Repulsion between all nodes
+        for (let i = 0; i < updated.length; i++) {
+          for (let j = i + 1; j < updated.length; j++) {
+            const n1 = updated[i];
+            const n2 = updated[j];
+            let dx = n2.x - n1.x;
+            let dy = n2.y - n1.y;
+            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+            if (dist < 320) {
+              const force = kRepel / (dist * dist);
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+
+              if (!n1.isRoot && n1.id !== draggedNodeId) {
+                n1.vx -= fx;
+                n1.vy -= fy;
+              }
+              if (!n2.isRoot && n2.id !== draggedNodeId) {
+                n2.vx += fx;
+                n2.vy += fy;
+              }
+            }
+          }
+        }
+
+        // 2. Spring attraction along links
+        links.forEach((l) => {
+          const s = updated.find((n) => n.id === l.source);
+          const t = updated.find((n) => n.id === l.target);
+          if (s && t) {
+            let dx = t.x - s.x;
+            let dy = t.y - s.y;
+            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            let delta = dist - targetLinkDist;
+            let fx = (dx / dist) * delta * kLink;
+            let fy = (dy / dist) * delta * kLink;
+
+            if (!s.isRoot && s.id !== draggedNodeId) {
+              s.vx += fx;
+              s.vy += fy;
+            }
+            if (!t.isRoot && t.id !== draggedNodeId) {
+              t.vx -= fx;
+              t.vy -= fy;
+            }
+          }
+        });
+
+        // 3. Apply velocity & friction
+        return updated.map((n) => {
+          if (n.id === draggedNodeId) return n;
+
+          n.vx = (n.vx || 0) * damping;
+          n.vy = (n.vy || 0) * damping;
+
+          // Cap velocity
+          const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+          if (speed > 8) {
+            n.vx = (n.vx / speed) * 8;
+            n.vy = (n.vy / speed) * 8;
+          }
+
+          if (Math.abs(n.vx) > 0.05 || Math.abs(n.vy) > 0.05) {
+            return {
+              ...n,
+              x: n.x + n.vx,
+              y: n.y + n.vy
+            };
+          }
+          return n;
+        });
+      });
+
+      animRef.current = requestAnimationFrame(simulate);
+    };
+
+    animRef.current = requestAnimationFrame(simulate);
+    return () => {
+      running = false;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+  }, [links, draggedNodeId, isMobile]);
+
+  // Expand a specific node
   const handleExpandNode = async (node, e) => {
     if (e) e.stopPropagation();
     if (expandingNodeId) return;
@@ -79,16 +192,14 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
         throw new Error('API unavailable');
       }
     } catch (apiErr) {
-      // Fallback for static hosting on GitHub Pages
       const fallback = generateFallbackNodeExpansion(node.id, node.label, topic);
       newNodes = fallback.newNodes;
       newLinks = fallback.newLinks;
     }
 
-    // Position new child nodes radially around the expanded parent node
     const parentX = node.x;
     const parentY = node.y;
-    const radius = 130;
+    const radius = isMobile ? 90 : 130;
 
     const formattedNewNodes = newNodes.map((nn, idx) => {
       const angle = (idx / newNodes.length) * 2 * Math.PI;
@@ -96,55 +207,65 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
         ...nn,
         x: parentX + Math.cos(angle) * radius,
         y: parentY + Math.sin(angle) * radius,
+        vx: Math.cos(angle) * 3,
+        vy: Math.sin(angle) * 3,
         parentId: node.id
       };
     });
 
     setNodes((prev) => [...prev, ...formattedNewNodes]);
     setLinks((prev) => [...prev, ...newLinks]);
-    
-    // Update expanded state on parent node
     setNodes((prev) =>
       prev.map((n) => (n.id === node.id ? { ...n, expanded: true } : n))
     );
     setExpandingNodeId(null);
   };
 
-  // Node Mouse Drag Handlers
-  const handleNodeMouseDown = (nodeId, e) => {
+  // Node Drag Handlers (Mouse & Touch)
+  const getEventCoords = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+  };
+
+  const handleNodeStart = (nodeId, e) => {
+    if (e.cancelable) e.preventDefault();
     e.stopPropagation();
     setDraggedNodeId(nodeId);
   };
 
-  const handleMouseMove = (e) => {
+  const handleMove = useCallback((e) => {
+    const coords = getEventCoords(e);
     if (draggedNodeId) {
       const svg = svgRef.current;
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
-      const clientX = (e.clientX - rect.left - pan.x) / zoom;
-      const clientY = (e.clientY - rect.top - pan.y) / zoom;
+      const clientX = (coords.clientX - rect.left - pan.x) / zoom;
+      const clientY = (coords.clientY - rect.top - pan.y) / zoom;
 
       setNodes((prev) =>
-        prev.map((n) => (n.id === draggedNodeId ? { ...n, x: clientX, y: clientY } : n))
+        prev.map((n) => (n.id === draggedNodeId ? { ...n, x: clientX, y: clientY, vx: 0, vy: 0 } : n))
       );
     } else if (isDraggingBg) {
       setPan({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
+        x: coords.clientX - dragStart.x,
+        y: coords.clientY - dragStart.y
       });
     }
-  };
+  }, [draggedNodeId, isDraggingBg, pan, zoom, dragStart]);
 
-  const handleMouseUp = () => {
+  const handleEnd = useCallback(() => {
     setDraggedNodeId(null);
     setIsDraggingBg(false);
-  };
+  }, []);
 
-  const handleBgMouseDown = (e) => {
+  const handleBgStart = (e) => {
+    const coords = getEventCoords(e);
     setIsDraggingBg(true);
     setDragStart({
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y
+      x: coords.clientX - pan.x,
+      y: coords.clientY - pan.y
     });
   };
 
@@ -165,34 +286,34 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
   };
 
   return (
-    <div className="glass-panel" style={{ width: '100%', margin: '1rem 0', padding: '1.25rem', position: 'relative', borderRadius: '24px', background: 'rgba(10, 12, 18, 0.95)' }}>
+    <div className="glass-panel" style={{ width: '100%', margin: '0.5rem 0', padding: isMobile ? '0.85rem' : '1.25rem', position: 'relative', borderRadius: '24px', background: 'rgba(10, 12, 18, 0.95)' }}>
       {/* Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.85rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: 'linear-gradient(135deg, #00f2fe, #7928ca)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Network size={22} color="#fff" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #00f2fe, #7928ca)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Network size={20} color="#fff" />
           </div>
           <div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.3px' }}>
-              Interactive Concept Knowledge Studio
+            <h3 style={{ fontSize: isMobile ? '1.05rem' : '1.2rem', fontWeight: 700, letterSpacing: '-0.3px' }}>
+              Concept Knowledge Studio
             </h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Topic: <strong style={{ color: 'var(--accent-cyan)' }}>{topic}</strong> • Click any node directly to expand child concepts
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Topic: <strong style={{ color: 'var(--accent-cyan)' }}>{topic}</strong>
             </span>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {/* Zoom Toolbar */}
+          {/* Zoom Controls */}
           <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '10px', padding: '2px', border: '1px solid var(--border-light)' }}>
-            <button onClick={handleZoomIn} style={{ padding: '6px 10px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Zoom In">
-              <ZoomIn size={16} />
+            <button onClick={handleZoomIn} style={{ padding: '5px 8px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Zoom In">
+              <ZoomIn size={15} />
             </button>
-            <button onClick={handleZoomOut} style={{ padding: '6px 10px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Zoom Out">
-              <ZoomOut size={16} />
+            <button onClick={handleZoomOut} style={{ padding: '5px 8px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Zoom Out">
+              <ZoomOut size={15} />
             </button>
-            <button onClick={handleResetView} style={{ padding: '6px 10px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Reset View">
-              <Maximize2 size={16} />
+            <button onClick={handleResetView} style={{ padding: '5px 8px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }} title="Reset View">
+              <Maximize2 size={15} />
             </button>
           </div>
 
@@ -205,17 +326,20 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
       </div>
 
       {/* Main Studio Viewport */}
-      <div style={{ display: 'flex', gap: '1rem', position: 'relative', minHeight: '560px' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '1rem', position: 'relative', minHeight: isMobile ? '380px' : '540px' }}>
         {/* SVG Interactive Canvas */}
         <div
-          style={{ flex: 1, position: 'relative', borderRadius: '18px', background: '#05060b', border: '1px solid var(--border-light)', overflow: 'hidden', cursor: isDraggingBg ? 'grabbing' : 'grab' }}
-          onMouseDown={handleBgMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          style={{ flex: 1, position: 'relative', borderRadius: '18px', background: '#05060b', border: '1px solid var(--border-light)', overflow: 'hidden', touchAction: 'none', cursor: isDraggingBg ? 'grabbing' : 'grab' }}
+          onMouseDown={handleBgStart}
+          onMouseMove={handleMove}
+          onMouseUp={handleEnd}
+          onTouchStart={handleBgStart}
+          onTouchMove={handleMove}
+          onTouchEnd={handleEnd}
         >
           <svg
             ref={svgRef}
-            style={{ width: '100%', height: '560px' }}
+            style={{ width: '100%', height: isMobile ? '380px' : '540px' }}
           >
             <defs>
               <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
@@ -245,7 +369,7 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
                       y1={source.y}
                       x2={target.x}
                       y2={target.y}
-                      stroke="rgba(0, 242, 254, 0.35)"
+                      stroke="rgba(0, 242, 254, 0.4)"
                       strokeWidth="2"
                       strokeDasharray={link.relationship === 'explains' ? '4 4' : 'none'}
                     />
@@ -272,7 +396,7 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
                 const isExpandingThis = expandingNodeId === node.id;
 
                 const styleConfig = categoryColors[node.category] || categoryColors.subconcept;
-                const nodeRadius = isRoot ? 32 : 24;
+                const nodeRadius = isRoot ? (isMobile ? 26 : 32) : (isMobile ? 20 : 24);
 
                 const isSearchMatch = searchTerm && node.label.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -285,21 +409,20 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
                       e.stopPropagation();
                       setSelectedNode(node);
                     }}
-                    onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
+                    onMouseDown={(e) => handleNodeStart(node.id, e)}
+                    onTouchStart={(e) => handleNodeStart(node.id, e)}
                   >
-                    {/* Pulsing selection aura */}
                     {(isSelected || isSearchMatch) && (
                       <circle
-                        r={nodeRadius + 10}
+                        r={nodeRadius + 8}
                         fill="none"
                         stroke="#00f2fe"
                         strokeWidth="2"
-                        opacity="0.6"
+                        opacity="0.7"
                         filter="url(#glow-cyan)"
                       />
                     )}
 
-                    {/* Main Node Circle */}
                     <circle
                       r={nodeRadius}
                       fill={isRoot ? '#7928ca' : styleConfig.bg}
@@ -308,24 +431,22 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
                       filter={isRoot ? 'url(#glow-purple)' : 'none'}
                     />
 
-                    {/* Node Label inside circle */}
                     <text
                       y={4}
                       fill={styleConfig.text}
-                      fontSize={isRoot ? '12' : '10'}
+                      fontSize={isRoot ? '11' : '9'}
                       fontWeight="bold"
                       fontFamily="Outfit, sans-serif"
                       textAnchor="middle"
                       pointerEvents="none"
                     >
-                      {node.label.length > 14 ? node.label.slice(0, 12) + '..' : node.label}
+                      {node.label.length > 12 ? node.label.slice(0, 10) + '..' : node.label}
                     </text>
 
-                    {/* Node Full Label below circle */}
                     <text
-                      y={nodeRadius + 18}
+                      y={nodeRadius + 16}
                       fill={isSelected ? '#00f2fe' : '#e5e7eb'}
-                      fontSize="11"
+                      fontSize="10"
                       fontWeight={isSelected ? 'bold' : 'normal'}
                       fontFamily="Outfit, sans-serif"
                       textAnchor="middle"
@@ -338,20 +459,21 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
                     <g
                       transform={`translate(${nodeRadius - 4}, ${-nodeRadius + 4})`}
                       onClick={(e) => handleExpandNode(node, e)}
+                      onTouchEnd={(e) => handleExpandNode(node, e)}
                       style={{ cursor: 'pointer' }}
                     >
                       <circle
-                        r="11"
+                        r="10"
                         fill="#00f2fe"
                         stroke="#000"
                         strokeWidth="1.5"
                       />
                       {isExpandingThis ? (
-                        <text y="4" x="0" fill="#000" fontSize="10" fontWeight="bold" textAnchor="middle">
+                        <text y="3" x="0" fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">
                           ..
                         </text>
                       ) : (
-                        <text y="4" x="0" fill="#000" fontSize="12" fontWeight="bold" textAnchor="middle">
+                        <text y="4" x="0" fill="#000" fontSize="11" fontWeight="bold" textAnchor="middle">
                           +
                         </text>
                       )}
@@ -362,21 +484,21 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
             </g>
           </svg>
 
-          {/* Quick Guidance Footer Overlay */}
-          <div style={{ position: 'absolute', bottom: '14px', left: '14px', background: 'rgba(15, 17, 26, 0.9)', padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--border-light)', fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Sparkles size={14} color="var(--accent-cyan)" />
-            <span>Click any node's <strong>(+)</strong> badge to expand sub-concepts. Drag nodes to customize your layout.</span>
+          {/* Guidance Footer */}
+          <div style={{ position: 'absolute', bottom: '10px', left: '10px', right: '10px', background: 'rgba(15, 17, 26, 0.9)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border-light)', fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <Sparkles size={14} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+            <span>Tap (+) to expand sub-concepts. Drag nodes to adjust layout.</span>
           </div>
         </div>
 
         {/* Selected Node Inspector Drawer */}
-        <div style={{ width: '320px', background: 'var(--bg-tertiary)', borderRadius: '18px', padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ width: isMobile ? '100%' : '320px', background: 'var(--bg-tertiary)', borderRadius: '18px', padding: '1.1rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           {/* Node Search Filter */}
           <div style={{ position: 'relative' }}>
-            <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '10px' }} />
+            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '10px' }} />
             <input
               type="text"
-              placeholder="Search concepts on graph..."
+              placeholder="Search concepts..."
               className="custom-input"
               style={{ paddingLeft: '2.2rem', fontSize: '0.82rem' }}
               value={searchTerm}
@@ -388,36 +510,35 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
             <>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(0, 242, 254, 0.15)', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(0, 242, 254, 0.15)', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
                     {selectedNode.category || 'Concept'}
                   </span>
                   {selectedNode.expanded && (
-                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontWeight: 600 }}>
+                    <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontWeight: 600 }}>
                       Expanded ✓
                     </span>
                   )}
                 </div>
-                <h4 style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '0.4rem', color: 'var(--text-primary)' }}>
+                <h4 style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.35rem', color: 'var(--text-primary)' }}>
                   {selectedNode.label}
                 </h4>
               </div>
 
-              <div style={{ background: 'var(--bg-card)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-light)', fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, flex: 1, overflowY: 'auto' }}>
+              <div style={{ background: 'var(--bg-card)', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--border-light)', fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.55, flex: 1, overflowY: 'auto', maxHeight: isMobile ? '160px' : 'none' }}>
                 {selectedNode.description || 'No detailed description provided for this concept.'}
               </div>
 
-              {/* Direct Action Button */}
               <button
                 onClick={(e) => handleExpandNode(selectedNode, e)}
                 disabled={expandingNodeId === selectedNode.id}
                 style={{
-                  padding: '0.8rem 1rem',
+                  padding: '0.75rem 1rem',
                   borderRadius: '12px',
                   background: expandingNodeId === selectedNode.id ? 'var(--bg-card)' : 'linear-gradient(135deg, #00f2fe, #4f46e5)',
                   border: 'none',
                   color: '#fff',
                   fontWeight: 700,
-                  fontSize: '0.88rem',
+                  fontSize: '0.85rem',
                   cursor: expandingNodeId === selectedNode.id ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -427,13 +548,13 @@ export default function ConceptGraph({ topic, initialGraphData, onClose }) {
                 }}
               >
                 {expandingNodeId === selectedNode.id ? <Loader2 size={16} className="spin" style={{ animation: 'spinSlow 1s linear infinite' }} /> : <Plus size={16} />}
-                {expandingNodeId === selectedNode.id ? 'Expanding Sub-Concepts...' : 'Expand Concept Node (+)'}
+                {expandingNodeId === selectedNode.id ? 'Expanding...' : 'Expand Concept Node (+)'}
               </button>
             </>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)', textAlign: 'center', gap: '0.75rem' }}>
-              <Layers size={36} color="var(--accent-cyan)" />
-              <span style={{ fontSize: '0.88rem' }}>Select any node on the graph studio to inspect detailed definitions & expand sub-concepts.</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)', textAlign: 'center', gap: '0.5rem', padding: '1rem 0' }}>
+              <Layers size={32} color="var(--accent-cyan)" />
+              <span style={{ fontSize: '0.82rem' }}>Select any concept node to inspect definitions & expand sub-concepts.</span>
             </div>
           )}
         </div>

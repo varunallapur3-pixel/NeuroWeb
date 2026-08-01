@@ -44,11 +44,11 @@ export function generateFallbackStepGuide(topic) {
     steps: [
       {
         stepNumber: 1,
-        title: `Introduction & Fundamentals of ${cleanTopic}`,
-        summary: `Understand the foundational concepts and prerequisite knowledge required for ${cleanTopic}.`,
-        detail: `${cleanTopic} begins with understanding its primary building blocks. Explore how foundational principles establish the groundwork for real-world mastery.`,
-        example: `// Step 1 Example Code / Concept\nconst concept = "${cleanTopic}";\nconsole.log("Mastering " + concept + " Step 1: Core Principles");`,
-        keyTakeaway: `Focus on grasping the core terminology and primary objectives before diving into complex mechanics.`
+        title: `Fundamentals of ${cleanTopic}`,
+        summary: `Understand foundational concepts and prerequisite knowledge.`,
+        detail: `${cleanTopic} begins with understanding its primary building blocks. Foundational principles establish the groundwork for real-world mastery.`,
+        example: `// Core Principles Example\nconst subject = "${cleanTopic}";\nconsole.log("Mastering " + subject + " - Step 1");`,
+        keyTakeaway: `Grasp foundational terminology and primary objectives before diving into complex mechanics.`
       },
       {
         stepNumber: 2,
@@ -60,7 +60,7 @@ export function generateFallbackStepGuide(topic) {
       },
       {
         stepNumber: 3,
-        title: `Practical Implementation & Implementation`,
+        title: `Practical Implementation`,
         summary: `Apply knowledge with practical examples and implementations.`,
         detail: `Put theory into practice by building a concrete implementation for ${cleanTopic}.`,
         example: `class ${cleanTopic.replace(/[^a-zA-Z0-9]/g, '') || 'Module'}Controller {\n  execute() {\n    return "Successfully implemented ${cleanTopic}";\n  }\n}`,
@@ -76,7 +76,7 @@ export function generateFallbackStepGuide(topic) {
       },
       {
         stepNumber: 5,
-        title: `Advanced Mastery & Real-World Best Practices`,
+        title: `Advanced Mastery & Best Practices`,
         summary: `Explore industry standards and future directions.`,
         detail: `Achieve mastery in ${cleanTopic} by following industry standards and staying ahead of emerging innovations.`,
         example: `// Advanced Pattern\nexport default async function masterclass() {\n  console.log("${cleanTopic} Mastered!");\n}`,

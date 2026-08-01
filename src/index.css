@@ -740,16 +740,66 @@ body {
   z-index: 1;
 }
 
+/* Mobile Backdrop Overlay */
+.sidebar-backdrop {
+  display: none;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .sidebar {
-    position: absolute;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
     transform: translateX(-100%);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.85);
   }
   .sidebar.open {
     transform: translateX(0);
   }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 40;
+  }
+  .top-navbar {
+    padding: 0.5rem 0.75rem;
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .navbar-left {
+    gap: 0.4rem;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .model-pill-button span, .web-search-toggle span {
+    font-size: 0.75rem;
+  }
   .hero-title {
-    font-size: 2rem;
+    font-size: 1.6rem;
   }
 }
+
+@media (max-width: 480px) {
+  .nav-tab-label-full {
+    display: none;
+  }
+  .nav-tab-label-short {
+    display: inline;
+  }
+}
+
+@media (min-width: 481px) {
+  .nav-tab-label-short {
+    display: none;
+  }
+}
+
